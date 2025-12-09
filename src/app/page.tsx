@@ -1,15 +1,16 @@
-// app/page.tsx
+// src/app/page.tsx
 import Image from "next/image";
+import { sampleTrips } from "../data/sampleTrips";
 
 export default function Home() {
   return (
     <main className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-950 to-slate-900 text-slate-50 flex items-center justify-center px-4 py-10">
-      <div className="w-full max-w-3xl flex flex-col items-center">
+      <div className="w-full max-w-4xl flex flex-col items-center">
         {/* Logo + title */}
         <div className="flex flex-col items-center gap-4">
           <div className="h-24 w-24 md:h-28 md:w-28 relative">
             <Image
-              src="/nextbid-logo.png"
+              src="/Nextbid-logo.png"
               alt="NextBid logo"
               fill
               className="object-contain"
@@ -46,6 +47,49 @@ export default function Home() {
             <li>15-line bid generator with IBID-compatible export</li>
           </ul>
         </div>
+
+        {/* Sample data section – real-ish 777 trips */}
+        <section className="mt-16 w-full max-w-4xl">
+          <h2 className="text-xs font-semibold tracking-[0.3em] text-sky-400 uppercase mb-3 text-center md:text-left">
+            SAMPLE 777 FO TRIPS · JAN 2026
+          </h2>
+          <p className="text-sm text-slate-300 mb-4 text-center md:text-left">
+            We&apos;ll build and test NextBid against real JSSTRIPS data. Here
+            are a few example 777 trips from the FO plan for January 2026.
+          </p>
+
+          <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/40 backdrop-blur">
+            <table className="min-w-full text-left text-sm">
+              <thead className="border-b border-slate-800 bg-slate-900/70">
+                <tr>
+                  <th className="px-4 py-3 text-slate-300">Trip</th>
+                  <th className="px-4 py-3 text-slate-300">Route</th>
+                  <th className="px-4 py-3 text-slate-300">Days</th>
+                  <th className="px-4 py-3 text-slate-300">Credit</th>
+                  <th className="px-4 py-3 text-slate-300">TAFB</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sampleTrips.map((trip) => (
+                  <tr
+                    key={trip.tripNumber}
+                    className="border-t border-slate-800/70 hover:bg-slate-800/40 transition-colors"
+                  >
+                    <td className="px-4 py-3 font-mono text-sky-300">
+                      {trip.tripNumber}
+                    </td>
+                    <td className="px-4 py-3 text-slate-100">{trip.route}</td>
+                    <td className="px-4 py-3 text-slate-200">{trip.tripDays}</td>
+                    <td className="px-4 py-3 text-slate-200">
+                      {trip.tripCredit}
+                    </td>
+                    <td className="px-4 py-3 text-slate-200">{trip.tafb}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
       </div>
     </main>
   );
