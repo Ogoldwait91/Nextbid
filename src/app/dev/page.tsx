@@ -4,6 +4,7 @@ import { renderTripPropertyCommand } from "../../rules/jssCommands";
 import type { TripPropertyCommand } from "../../rules/types";
 import { oliProfile } from "../../data/oliProfile";
 import { buildSimpleBidGroup } from "../../lib/bidBuilder";
+import { getTripsAffectedByCommand } from "../../lib/tripMatching";
 
 type GeneratedBidLine = {
   lineNumber: number;
@@ -176,20 +177,44 @@ export default function DevPage() {
           </p>
 
           {/* Pretty T-line view */}
-          <div className="space-y-2 text-xs bg-slate-950/80 border border-slate-800 rounded-xl p-3 font-mono mb-4">
+                    {/* Pretty T-line view with affected trips */}
+          <div className="space-y-3 text-xs bg-slate-950/80 border border-slate-800 rounded-xl p-3 font-mono mb-4">
             {generatedBidLines.map((line) => {
               const tNumber = line.lineNumber.toString().padStart(2, "0");
+              const affectedTrips = getTripsAffectedByCommand(
+                line.command,
+                sampleTrips
+              );
+
               return (
-                <div key={tNumber}>
-                  <span className="text-slate-400 mr-2">
-                    T{tNumber} S{line.strength}
-                  </span>
-                  {renderTripPropertyCommand(line.command)}
-                  {line.command.note && (
-                    <span className="ml-2 text-[10px] text-slate-400">
-                      {"// "}{line.command.note}
+                <div key={tNumber} className="space-y-1">
+                  <div>
+                    <span className="text-slate-400 mr-2">
+                      T{tNumber} S{line.strength}
                     </span>
-                  )}
+                    {renderTripPropertyCommand(line.command)}
+                    {line.command.note && (
+                      <span className="ml-2 text-[10px] text-slate-400">
+                        {"// "}{line.command.note}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="pl-6 text-[11px] text-slate-400">
+                    {affectedTrips.length > 0 ? (
+                      <span>
+                        Targets trips:{" "}
+                        {affectedTrips
+                          .map(
+                            (trip) =>
+                              `${trip.tripNumber} (${trip.route.split("(")[0].trim()})`
+                          )
+                          .join(", ")}
+                      </span>
+                    ) : (
+                      <span>Targets: none of the sample trips (yet)</span>
+                    )}
+                  </div>
                 </div>
               );
             })}

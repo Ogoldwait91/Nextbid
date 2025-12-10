@@ -5,15 +5,15 @@ export type Trip = {
   route: string;
   departureBase: string;
   planningPeriod: string;
-  tafb: string;       // Time Away From Base
-  tripCredit: string; // credit hours as shown in JSSTRIPS
+  tafb: string; // Time Away From Base
+  tripCredit: string;
   tripDays: number;
   flyingHours: string;
   dutyHours: string;
+  // Rough layover length estimate in hours (for matching long layovers).
+  layoverHoursEstimate?: number;
 };
 
-// NOTE: These are example values – you can edit them to match
-// your real JSSTRIPS report for JAN 26.
 export const sampleTrips: Trip[] = [
   {
     tripNumber: "7024",
@@ -25,6 +25,7 @@ export const sampleTrips: Trip[] = [
     tripDays: 4,
     flyingHours: "21:50",
     dutyHours: "25:40",
+    layoverHoursEstimate: 48, // long-ish MLE layover (placeholder)
   },
   {
     tripNumber: "7202",
@@ -36,6 +37,7 @@ export const sampleTrips: Trip[] = [
     tripDays: 4,
     flyingHours: "21:55",
     dutyHours: "25:40",
+    layoverHoursEstimate: 44, // long LAX layover (placeholder)
   },
   {
     tripNumber: "7174",
@@ -47,5 +49,6 @@ export const sampleTrips: Trip[] = [
     tripDays: 3,
     flyingHours: "15:00",
     dutyHours: "18:45",
+    layoverHoursEstimate: 24, // shorter JFK layover (placeholder)
   },
 ];
