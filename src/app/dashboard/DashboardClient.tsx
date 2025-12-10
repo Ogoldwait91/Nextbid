@@ -5,6 +5,9 @@ import { sampleTrips } from "../../data/sampleTrips";
 import {
   oliProfile as baseProfile,
   type PreferenceProfile,
+  type TripLengthRule,
+  type TripPool,
+  type DestinationRule,
 } from "../../data/oliProfile";
 import { buildSimpleBidGroup } from "../../lib/bidBuilder";
 import { renderTripPropertyCommand } from "../../rules/jssCommands";
@@ -17,7 +20,7 @@ type GeneratedBidLine = {
   command: TripPropertyCommand;
 };
 
-type TripLengthPreset = "3D" | "4D" | "4-5D" | "6D+";
+type TripLengthPreset = "3D" | "4D" | "4-5D" | "5D+" | "6D+";
 
 export default function DashboardClient() {
   const [preferLongLayovers, setPreferLongLayovers] = useState(
@@ -41,59 +44,72 @@ export default function DashboardClient() {
     baseProfile.latestPreferredReportTime ?? "22:00"
   );
 
-  // Trip length rule controls
-  const [tripLengthEnabled, setTripLengthEnabled] = useState<boolean>(
-    !!baseProfile.tripLengthPreference
-  );
-  const [tripLengthMode, setTripLengthMode] = useState<"AWARD" | "AVOID">(
-    baseProfile.tripLengthPreference?.mode ?? "AWARD"
-  );
-  const [tripLengthPreset, setTripLengthPreset] = useState<TripLengthPreset>(
-    (() => {
-      const tl = baseProfile.tripLengthPreference;
-      if (!tl) return "4-5D";
-      if (tl.minDays === 3 && tl.maxDays === 3) return "3D";
-      if (tl.minDays === 4 && tl.maxDays === 4) return "4D";
-      if (tl.minDays === 4 && tl.maxDays === 5) return "4-5D";
-      if (tl.minDays === 6 && tl.maxDays == null) return "6D+";
-      return "4-5D";
-    })()
+  // Trip length rules
+  const [tripLengthRules, setTripLengthRules] = useState<TripLengthRule[]>(
+    baseProfile.tripLengthRules ?? []
   );
 
-  // Map preset to min/max days for the profile
-  function mapPresetToRange(
-    preset: TripLengthPreset
-  ): { minDays: number; maxDays?: number } {
-    switch (preset) {
-      case "3D":
-        return { minDays: 3, maxDays: 3 };
-      case "4D":
-        return { minDays: 4, maxDays: 4 };
-      case "4-5D":
-        return { minDays: 4, maxDays: 5 };
-      case "6D+":
-        return { minDays: 6, maxDays: undefined };
-      default:
-        return { minDays: 4, maxDays: 5 };
-    }
+  function addTripLengthRule() {
+    const newRule: TripLengthRule = {
+      id: `len-${Date.now()}`,
+      mode: "AWARD",
+      minDays: 4,
+      maxDays: 4,
+      tripPool: "H+",
+    };
+    setTripLengthRules((prev) => [...prev, newRule]);
   }
 
-  const tripLengthRange = mapPresetToRange(tripLengthPreset);
+  function updateTripLengthRule(
+    id: string,
+    updater: (rule: TripLengthRule) => TripLengthRule
+  ) {
+    setTripLengthRules((prev) =>
+      prev.map((r) => (r.id === id ? updater(r) : r))
+    );
+  }
 
-  // Build an "effective" profile from base + UI controls
+  function removeTripLengthRule(id: string) {
+    setTripLengthRules((prev) => prev.filter((r) => r.id !== id));
+  }
+
+  // Destination rules
+  const [destinationRules, setDestinationRules] = useState<DestinationRule[]>(
+    baseProfile.destinationRules ?? []
+  );
+
+  function addDestinationRule() {
+    const newRule: DestinationRule = {
+      id: `dest-${Date.now()}`,
+      mode: "AWARD",
+      qualifier: "DXB",
+      tripPool: "H+",
+    };
+    setDestinationRules((prev) => [...prev, newRule]);
+  }
+
+  function updateDestinationRule(
+    id: string,
+    updater: (rule: DestinationRule) => DestinationRule
+  ) {
+    setDestinationRules((prev) =>
+      prev.map((r) => (r.id === id ? updater(r) : r))
+    );
+  }
+
+  function removeDestinationRule(id: string) {
+    setDestinationRules((prev) => prev.filter((r) => r.id !== id));
+  }
+
+  // Build effective profile
   const profile: PreferenceProfile = {
     ...baseProfile,
     preferLongLayovers,
     avoidDestinations: avoidBom ? baseProfile.avoidDestinations : [],
     earliestPreferredReportTime: limitEarliest ? earliestReport : undefined,
     latestPreferredReportTime: limitLatest ? latestReport : undefined,
-    tripLengthPreference: tripLengthEnabled
-      ? {
-          mode: tripLengthMode,
-          minDays: tripLengthRange.minDays,
-          maxDays: tripLengthRange.maxDays,
-        }
-      : undefined,
+    tripLengthRules,
+    destinationRules,
   };
 
   const generatedBidGroup = buildSimpleBidGroup(profile, 5);
@@ -134,7 +150,7 @@ export default function DashboardClient() {
 
   return (
     <div className="space-y-8">
-      {/* Top row: overview + live preference controls */}
+      {/* Top row: overview + controls */}
       <section className="grid gap-4 lg:grid-cols-[2fr,1.3fr]">
         {/* Overview cards */}
         <div className="grid gap-4 md:grid-cols-3">
@@ -194,7 +210,7 @@ export default function DashboardClient() {
           </div>
         </div>
 
-        {/* Live preference knobs (demo) */}
+        {/* Preference controls */}
         <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 space-y-3">
           <p className="text-[11px] font-semibold tracking-[0.25em] text-sky-400 uppercase">
             Preferences · Demo controls
@@ -205,13 +221,18 @@ export default function DashboardClient() {
           </p>
 
           <div className="space-y-2 mt-2">
-            <TripLengthRow
-              enabled={tripLengthEnabled}
-              mode={tripLengthMode}
-              preset={tripLengthPreset}
-              onToggleEnabled={() => setTripLengthEnabled((v) => !v)}
-              onModeChange={setTripLengthMode}
-              onPresetChange={setTripLengthPreset}
+            <DestinationRulesPanel
+              rules={destinationRules}
+              onAddRule={addDestinationRule}
+              onUpdateRule={updateDestinationRule}
+              onRemoveRule={removeDestinationRule}
+            />
+
+            <TripLengthRulesPanel
+              rules={tripLengthRules}
+              onAddRule={addTripLengthRule}
+              onUpdateRule={updateTripLengthRule}
+              onRemoveRule={removeTripLengthRule}
             />
 
             <ToggleRow
@@ -249,6 +270,7 @@ export default function DashboardClient() {
         </div>
       </section>
 
+      {/* Bidlines + trips in focus */}
       <section className="grid gap-6 lg:grid-cols-2">
         {/* Bidlines preview */}
         <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 md:p-5 space-y-3">
@@ -328,7 +350,7 @@ export default function DashboardClient() {
           </div>
         </div>
 
-        {/* Trips targeted */}
+        {/* Trips in focus */}
         <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 md:p-5 space-y-3">
           <div className="flex items-center justify-between">
             <div>
@@ -401,6 +423,8 @@ export default function DashboardClient() {
     </div>
   );
 }
+
+/* ---------- UI helpers ---------- */
 
 type ToggleRowProps = {
   label: string;
@@ -501,64 +525,126 @@ function TimeLimitRow({
   );
 }
 
-type TripLengthRowProps = {
-  enabled: boolean;
-  mode: "AWARD" | "AVOID";
-  preset: TripLengthPreset;
-  onToggleEnabled: () => void;
-  onModeChange: (mode: "AWARD" | "AVOID") => void;
-  onPresetChange: (preset: TripLengthPreset) => void;
+/* ---------- Trip length rules panel ---------- */
+
+type TripLengthRulesPanelProps = {
+  rules: TripLengthRule[];
+  onAddRule: () => void;
+  onUpdateRule: (id: string, updater: (rule: TripLengthRule) => TripLengthRule) => void;
+  onRemoveRule: (id: string) => void;
 };
 
-function TripLengthRow({
-  enabled,
-  mode,
-  preset,
-  onToggleEnabled,
-  onModeChange,
-  onPresetChange,
-}: TripLengthRowProps) {
+function TripLengthRulesPanel({
+  rules,
+  onAddRule,
+  onUpdateRule,
+  onRemoveRule,
+}: TripLengthRulesPanelProps) {
+  return (
+    <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-2.5">
+      <div className="flex items-center justify-between mb-1">
+        <div>
+          <p className="text-[13px] text-slate-100">Trip length rules</p>
+          <p className="text-[11px] text-slate-400">
+            Add multiple award/avoid rules for different trip lengths.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onAddRule}
+          className="text-[11px] px-2 py-1 rounded-lg border border-sky-600 text-sky-200 hover:bg-sky-900/40"
+        >
+          + Add rule
+        </button>
+      </div>
+
+      {rules.length === 0 && (
+        <p className="text-[11px] text-slate-500">
+          No trip length rules yet. Add one to start prioritising 3D/4D/5D+ trips.
+        </p>
+      )}
+
+      <div className="space-y-2">
+        {rules.map((rule) => (
+          <TripLengthRuleRow
+            key={rule.id}
+            rule={rule}
+            onChange={(updater) => onUpdateRule(rule.id, updater)}
+            onRemove={() => onRemoveRule(rule.id)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+type TripLengthRuleRowProps = {
+  rule: TripLengthRule;
+  onChange: (updater: (rule: TripLengthRule) => TripLengthRule) => void;
+  onRemove: () => void;
+};
+
+function TripLengthRuleRow({
+  rule,
+  onChange,
+  onRemove,
+}: TripLengthRuleRowProps) {
   const presets: { value: TripLengthPreset; label: string }[] = [
     { value: "3D", label: "3-day trips" },
     { value: "4D", label: "4-day trips" },
     { value: "4-5D", label: "4–5 days" },
+    { value: "5D+", label: "5 days or more" },
     { value: "6D+", label: "6 days or more" },
   ];
 
+  function mapRuleToPreset(rule: TripLengthRule): TripLengthPreset {
+    const { minDays, maxDays } = rule;
+    if (minDays === 3 && maxDays === 3) return "3D";
+    if (minDays === 4 && maxDays === 4) return "4D";
+    if (minDays === 4 && maxDays === 5) return "4-5D";
+    if (minDays === 5 && maxDays == null) return "5D+";
+    if (minDays === 6 && maxDays == null) return "6D+";
+    return "4-5D";
+  }
+
+  function mapPresetToRange(
+    preset: TripLengthPreset
+  ): { minDays: number; maxDays?: number } {
+    switch (preset) {
+      case "3D":
+        return { minDays: 3, maxDays: 3 };
+      case "4D":
+        return { minDays: 4, maxDays: 4 };
+      case "4-5D":
+        return { minDays: 4, maxDays: 5 };
+      case "5D+":
+        return { minDays: 5, maxDays: undefined };
+      case "6D+":
+        return { minDays: 6, maxDays: undefined };
+      default:
+        return { minDays: 4, maxDays: 5 };
+    }
+  }
+
+  const currentPreset = mapRuleToPreset(rule);
+
+  const pools: { value?: TripPool; label: string }[] = [
+    { value: undefined, label: "No pool" },
+    { value: "L", label: "L" },
+    { value: "H", label: "H" },
+    { value: "H+", label: "H+" },
+    { value: "H++", label: "H++" },
+  ];
+
   return (
-    <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-2.5">
-      <div className="flex items-center justify-between gap-3">
-        <button
-          type="button"
-          onClick={onToggleEnabled}
-          className="flex items-center gap-2"
-        >
-          <div
-            className={`relative inline-flex h-5 w-9 items-center rounded-full border ${
-              enabled
-                ? "bg-sky-500/80 border-sky-300"
-                : "bg-slate-800 border-slate-600"
-            }`}
-          >
-            <span
-              className={`inline-block h-4 w-4 transform rounded-full bg-slate-950 transition-transform ${
-                enabled ? "translate-x-4" : "translate-x-0.5"
-              }`}
-            />
-          </div>
-          <div className="text-left">
-            <p className="text-[13px] text-slate-100">Trip length rule</p>
-            <p className="text-[11px] text-slate-400">
-              Award or avoid specific trip lengths.
-            </p>
-          </div>
-        </button>
+    <div className="flex flex-col gap-2 rounded-lg border border-slate-800 bg-slate-950/70 px-2 py-2">
+      <div className="flex items-center justify-between gap-2">
         <div className="flex rounded-full border border-slate-700 bg-slate-900 overflow-hidden text-[11px]">
           <button
             type="button"
-            onClick={() => onModeChange("AWARD")}
+            onClick={() => onChange((r) => ({ ...r, mode: "AWARD" }))}
             className={`px-3 py-1 ${
-              mode === "AWARD"
+              rule.mode === "AWARD"
                 ? "bg-sky-600 text-slate-50"
                 : "text-slate-300"
             }`}
@@ -567,9 +653,9 @@ function TripLengthRow({
           </button>
           <button
             type="button"
-            onClick={() => onModeChange("AVOID")}
+            onClick={() => onChange((r) => ({ ...r, mode: "AVOID" }))}
             className={`px-3 py-1 ${
-              mode === "AVOID"
+              rule.mode === "AVOID"
                 ? "bg-rose-600 text-slate-50"
                 : "text-slate-300"
             }`}
@@ -577,27 +663,212 @@ function TripLengthRow({
             Avoid
           </button>
         </div>
+
+        <button
+          type="button"
+          onClick={onRemove}
+          className="text-[11px] text-slate-500 hover:text-rose-400"
+        >
+          Remove
+        </button>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {presets.map((p) => {
-          const active = preset === p.value;
-          return (
-            <button
-              key={p.value}
-              type="button"
-              onClick={() => onPresetChange(p.value)}
-              className={`px-3 py-1.5 rounded-full text-[11px] border transition-colors ${
-                active
-                  ? "border-sky-500 bg-sky-950 text-sky-200"
-                  : "border-slate-700 bg-slate-950 text-slate-300 hover:border-slate-500"
-              } ${!enabled ? "opacity-50 cursor-not-allowed" : ""}`}
-              disabled={!enabled}
-            >
-              {p.label}
-            </button>
-          );
-        })}
+      <div className="flex flex-wrap gap-2 items-center justify-between">
+        <div className="flex flex-wrap gap-2">
+          {presets.map((p) => {
+            const active = currentPreset === p.value;
+            return (
+              <button
+                key={p.value}
+                type="button"
+                onClick={() => {
+                  const range = mapPresetToRange(p.value);
+                  onChange((r) => ({
+                    ...r,
+                    minDays: range.minDays,
+                    maxDays: range.maxDays,
+                  }));
+                }}
+                className={`px-3 py-1.5 rounded-full text-[11px] border transition-colors ${
+                  active
+                    ? "border-sky-500 bg-sky-950 text-sky-200"
+                    : "border-slate-700 bg-slate-950 text-slate-300 hover:border-slate-500"
+                }`}
+              >
+                {p.label}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="flex items-center gap-1 text-[11px]">
+          <span className="text-slate-400">Pool</span>
+          <select
+            value={rule.tripPool ?? ""}
+            onChange={(e) => {
+              const value = e.target.value as TripPool | "";
+              onChange((r) => ({
+                ...r,
+                tripPool: value === "" ? undefined : value,
+              }));
+            }}
+            className="bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-slate-100"
+          >
+            {pools.map((p) => (
+              <option key={p.label} value={p.value ?? ""}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Destination rules panel ---------- */
+
+type DestinationRulesPanelProps = {
+  rules: DestinationRule[];
+  onAddRule: () => void;
+  onUpdateRule: (id: string, updater: (rule: DestinationRule) => DestinationRule) => void;
+  onRemoveRule: (id: string) => void;
+};
+
+function DestinationRulesPanel({
+  rules,
+  onAddRule,
+  onUpdateRule,
+  onRemoveRule,
+}: DestinationRulesPanelProps) {
+  return (
+    <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-2.5">
+      <div className="flex items-center justify-between mb-1">
+        <div>
+          <p className="text-[13px] text-slate-100">Destination rules</p>
+          <p className="text-[11px] text-slate-400">
+            Award or avoid specific destinations or regions.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onAddRule}
+          className="text-[11px] px-2 py-1 rounded-lg border border-sky-600 text-sky-200 hover:bg-sky-900/40"
+        >
+          + Add rule
+        </button>
+      </div>
+
+      {rules.length === 0 && (
+        <p className="text-[11px] text-slate-500">
+          No destination rules yet. Add one to start prioritising DXB, ATL, etc.
+        </p>
+      )}
+
+      <div className="space-y-2">
+        {rules.map((rule) => (
+          <DestinationRuleRow
+            key={rule.id}
+            rule={rule}
+            onChange={(updater) => onUpdateRule(rule.id, updater)}
+            onRemove={() => onRemoveRule(rule.id)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+type DestinationRuleRowProps = {
+  rule: DestinationRule;
+  onChange: (updater: (rule: DestinationRule) => DestinationRule) => void;
+  onRemove: () => void;
+};
+
+function DestinationRuleRow({
+  rule,
+  onChange,
+  onRemove,
+}: DestinationRuleRowProps) {
+  const pools: { value?: TripPool; label: string }[] = [
+    { value: undefined, label: "No pool" },
+    { value: "L", label: "L" },
+    { value: "H", label: "H" },
+    { value: "H+", label: "H+" },
+    { value: "H++", label: "H++" },
+  ];
+
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-slate-800 bg-slate-950/70 px-2 py-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex rounded-full border border-slate-700 bg-slate-900 overflow-hidden text-[11px]">
+          <button
+            type="button"
+            onClick={() => onChange((r) => ({ ...r, mode: "AWARD" }))}
+            className={`px-3 py-1 ${
+              rule.mode === "AWARD"
+                ? "bg-sky-600 text-slate-50"
+                : "text-slate-300"
+            }`}
+          >
+            Award
+          </button>
+          <button
+            type="button"
+            onClick={() => onChange((r) => ({ ...r, mode: "AVOID" }))}
+            className={`px-3 py-1 ${
+              rule.mode === "AVOID"
+                ? "bg-rose-600 text-slate-50"
+                : "text-slate-300"
+            }`}
+          >
+            Avoid
+          </button>
+        </div>
+
+        <button
+          type="button"
+          onClick={onRemove}
+          className="text-[11px] text-slate-500 hover:text-rose-400"
+        >
+          Remove
+        </button>
+      </div>
+
+      <div className="flex flex-wrap gap-2 items-center justify-between">
+        <div className="flex items-center gap-1 text-[11px]">
+          <span className="text-slate-400">Dest / region</span>
+          <input
+            type="text"
+            value={rule.qualifier}
+            onChange={(e) =>
+              onChange((r) => ({ ...r, qualifier: e.target.value.toUpperCase() }))
+            }
+            className="bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-slate-100 w-24"
+            placeholder="DXB"
+          />
+        </div>
+
+        <div className="flex items-center gap-1 text-[11px]">
+          <span className="text-slate-400">Pool</span>
+          <select
+            value={rule.tripPool ?? ""}
+            onChange={(e) => {
+              const value = e.target.value as TripPool | "";
+              onChange((r) => ({
+                ...r,
+                tripPool: value === "" ? undefined : value,
+              }));
+            }}
+            className="bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-slate-100"
+          >
+            {pools.map((p) => (
+              <option key={p.label} value={p.value ?? ""}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
     </div>
   );

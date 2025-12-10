@@ -12,6 +12,12 @@ export type Trip = {
   dutyHours: string;
   // Rough layover length estimate in hours (for matching long layovers).
   layoverHoursEstimate?: number;
+
+  /**
+   * Local report time in HH:MM (24h) at departure base,
+   * used for TRIP_REPORT_TIME matching, e.g. "08:25".
+   */
+  reportTimeLocal?: string;
 };
 
 export const sampleTrips: Trip[] = [
@@ -25,7 +31,8 @@ export const sampleTrips: Trip[] = [
     tripDays: 4,
     flyingHours: "21:50",
     dutyHours: "25:40",
-    layoverHoursEstimate: 48, // long-ish MLE layover (placeholder)
+    layoverHoursEstimate: 48,
+    reportTimeLocal: "08:25",
   },
   {
     tripNumber: "7202",
@@ -37,7 +44,8 @@ export const sampleTrips: Trip[] = [
     tripDays: 4,
     flyingHours: "21:55",
     dutyHours: "25:40",
-    layoverHoursEstimate: 44, // long LAX layover (placeholder)
+    layoverHoursEstimate: 44,
+    reportTimeLocal: "09:10",
   },
   {
     tripNumber: "7174",
@@ -49,6 +57,7 @@ export const sampleTrips: Trip[] = [
     tripDays: 3,
     flyingHours: "15:00",
     dutyHours: "18:45",
-    layoverHoursEstimate: 24, // shorter JFK layover (placeholder)
+    layoverHoursEstimate: 24,
+    reportTimeLocal: "07:45",
   },
 ];

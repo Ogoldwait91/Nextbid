@@ -2,10 +2,21 @@
 
 export type DayPreference = "PREFER_WORK" | "NEUTRAL" | "PREFER_OFF";
 
-export interface TripLengthPreference {
+export type TripPool = "L--" | "L-" | "L" | "H" | "H+" | "H++";
+
+export interface TripLengthRule {
+  id: string;
   mode: "AWARD" | "AVOID";
   minDays: number;
   maxDays?: number; // if undefined, means "minDays or more"
+  tripPool?: TripPool; // usually only for AWARD
+}
+
+export interface DestinationRule {
+  id: string;
+  mode: "AWARD" | "AVOID";
+  qualifier: string; // e.g. "DXB", "ATL", "MIDDLE EAST"
+  tripPool?: TripPool; // for AWARD lines
 }
 
 // Simple preference profile for development.
@@ -19,7 +30,8 @@ export interface PreferenceProfile {
   preferredDestinations: string[];
   avoidDestinations: string[];
 
-  preferLongTrips: boolean; // legacy, kept for now
+  // Legacy flags (can be phased out as rules take over)
+  preferLongTrips: boolean;
   preferBackToBackTrips: boolean;
   preferLongLayovers: boolean;
 
@@ -33,8 +45,11 @@ export interface PreferenceProfile {
   earliestPreferredReportTime?: string; // e.g. "07:00"
   latestPreferredReportTime?: string;   // e.g. "22:00"
 
-  // Trip length rule (new)
-  tripLengthPreference?: TripLengthPreference;
+  // Trip length rules – multiple allowed
+  tripLengthRules?: TripLengthRule[];
+
+  // Destination rules – multiple allowed
+  destinationRules?: DestinationRule[];
 
   // Weekly pattern (for future use – UX only for now)
   dayPreferences: {
@@ -55,10 +70,11 @@ export const oliProfile: PreferenceProfile = {
   seat: "FO",
   seniorityNumber: 1234,
 
+  // These can be used as a fallback if no destinationRules are defined
   preferredDestinations: ["DXB", "ATL"],
   avoidDestinations: ["BOM"],
 
-  preferLongTrips: true, // currently unused by the builder if tripLengthPreference is set
+  preferLongTrips: true, // legacy
   preferBackToBackTrips: false,
   preferLongLayovers: true,
 
@@ -72,12 +88,39 @@ export const oliProfile: PreferenceProfile = {
   earliestPreferredReportTime: "07:00",
   latestPreferredReportTime: "22:00",
 
-  // Default trip length rule: award 4–5 day trips
-  tripLengthPreference: {
-    mode: "AWARD",
-    minDays: 4,
-    maxDays: 5,
-  },
+  // Example trip length rules:
+  // Award 4-day trips, avoid 5 days or more.
+  tripLengthRules: [
+    {
+      id: "len-award-4d",
+      mode: "AWARD",
+      minDays: 4,
+      maxDays: 4,
+      tripPool: "H+",
+    },
+    {
+      id: "len-avoid-5plus",
+      mode: "AVOID",
+      minDays: 5,
+    },
+  ],
+
+  // Example destination rules: award DXB/ATL
+  destinationRules: [
+    {
+      id: "dest-award-dxb",
+      mode: "AWARD",
+      qualifier: "DXB",
+      tripPool: "H++",
+    },
+    {
+      id: "dest-award-atl",
+      mode: "AWARD",
+      qualifier: "ATL",
+      tripPool: "H+",
+    },
+    // We will still use avoidDestinations + the BOM toggle for now
+  ],
 
   // Weekly pattern – placeholder
   dayPreferences: {

@@ -1,13 +1,7 @@
 // src/rules/types.ts
 
 // Trip pools L-- to H++ from the JSS aide memoire.
-export type TripPool =
-  | "L--"
-  | "L-"
-  | "L"
-  | "H"
-  | "H+"
-  | "H++";
+export type TripPool = "L--" | "L-" | "L" | "N" | "H" | "H+" | "H++";
 
 // Two main command families from JSS: AWARD / AVOID.
 export type CommandKind = "AWARD" | "AVOID";

@@ -1,16 +1,37 @@
 // src/lib/bidBuilder.ts
 import type { TripPropertyCommand } from "../rules/types";
-import type { PreferenceProfile } from "../data/oliProfile";
+import type {
+  PreferenceProfile,
+  TripLengthRule,
+  DestinationRule,
+} from "../data/oliProfile";
 
 type ScoredCommand = {
   command: TripPropertyCommand;
   score: number;
 };
 
-function describeTripLength(minDays: number, maxDays?: number): string {
+function describeTripLengthRange(rule: TripLengthRule): string {
+  const { minDays, maxDays } = rule;
   if (maxDays == null) return `${minDays} days or more`;
   if (minDays === maxDays) return `${minDays}-day trips`;
   return `${minDays}–${maxDays}-day trips`;
+}
+
+function buildTripLengthQualifier(rule: TripLengthRule): string {
+  const { minDays, maxDays } = rule;
+  if (maxDays == null) {
+    return `>= ${minDays}D`;
+  }
+  if (minDays === maxDays) {
+    return `${minDays}D`;
+  }
+  return `${minDays}-${maxDays}D`;
+}
+
+function describeDestinationRule(rule: DestinationRule): string {
+  const label = rule.qualifier.toUpperCase();
+  return label;
 }
 
 // Preference engine v1.
@@ -20,66 +41,81 @@ export function buildSimpleBidGroup(
 ): TripPropertyCommand[] {
   const candidates: ScoredCommand[] = [];
 
-  // 1) Destination preferences (primary + secondary)
-  profile.preferredDestinations.forEach((dest, index) => {
-    const baseScore = 100;
-    const score = baseScore - index * 10;
+  // 1) Destination preferences
+  if (profile.destinationRules && profile.destinationRules.length > 0) {
+    profile.destinationRules.forEach((rule, index) => {
+      const isAward = rule.mode === "AWARD";
+      const baseScore = isAward ? 110 : 130; // Avoid slightly higher priority
+      const score = baseScore - index * 2;
 
-    candidates.push({
-      score,
-      command: {
-        kind: "AWARD",
-        property: "DESTINATION",
-        qualifier: dest,
-        tripPool: index === 0 ? "H++" : "H+",
-        note:
-          index === 0
-            ? `Primary destination preference for ${dest}`
-            : `Secondary destination preference for ${dest}`,
-      },
+      candidates.push({
+        score,
+        command: {
+          kind: rule.mode,
+          property: "DESTINATION",
+          qualifier: rule.qualifier.toUpperCase(),
+          tripPool: isAward ? rule.tripPool ?? "H" : undefined,
+          note: `${isAward ? "Prefer" : "Avoid"} ${describeDestinationRule(
+            rule
+          )} trips`,
+        },
+      });
     });
-  });
+  } else {
+    // Fallback to simple preferred/avoid lists
+    profile.preferredDestinations.forEach((dest, index) => {
+      const baseScore = 100;
+      const score = baseScore - index * 10;
 
-  // Avoid destinations – very high priority.
-  profile.avoidDestinations.forEach((dest) => {
-    candidates.push({
-      score: 120,
-      command: {
-        kind: "AVOID",
-        property: "DESTINATION",
-        qualifier: dest,
-        note: `Completely avoid ${dest}`,
-      },
+      candidates.push({
+        score,
+        command: {
+          kind: "AWARD",
+          property: "DESTINATION",
+          qualifier: dest,
+          tripPool: index === 0 ? "H++" : "H+",
+          note:
+            index === 0
+              ? `Primary destination preference for ${dest}`
+              : `Secondary destination preference for ${dest}`,
+        },
+      });
     });
-  });
 
-  // 2) Trip length preference (new model)
-  if (profile.tripLengthPreference) {
-    const { mode, minDays, maxDays } = profile.tripLengthPreference;
+    // Avoid destinations – very high priority.
+    profile.avoidDestinations.forEach((dest) => {
+      candidates.push({
+        score: 120,
+        command: {
+          kind: "AVOID",
+          property: "DESTINATION",
+          qualifier: dest,
+          note: `Completely avoid ${dest}`,
+        },
+      });
+    });
+  }
 
-    let qualifier: string;
-    if (maxDays == null) {
-      qualifier = `>= ${minDays}D`;
-    } else if (minDays === maxDays) {
-      qualifier = `${minDays}D`;
-    } else {
-      qualifier = `${minDays}-${maxDays}D`;
-    }
+  // 2) Trip length rules (multiple)
+  if (profile.tripLengthRules && profile.tripLengthRules.length > 0) {
+    profile.tripLengthRules.forEach((rule, idx) => {
+      const qualifier = buildTripLengthQualifier(rule);
+      const notePrefix = rule.mode === "AWARD" ? "Prefer" : "Avoid";
+      const score = 80 - idx * 3; // slightly decreasing priority as you add more
 
-    const notePrefix = mode === "AWARD" ? "Prefer" : "Avoid";
-
-    candidates.push({
-      score: 80,
-      command: {
-        kind: mode,
-        property: "TRIP_LENGTH",
-        qualifier,
-        tripPool: mode === "AWARD" ? "H" : undefined,
-        note: `${notePrefix} ${describeTripLength(minDays, maxDays)}`,
-      },
+      candidates.push({
+        score,
+        command: {
+          kind: rule.mode,
+          property: "TRIP_LENGTH",
+          qualifier,
+          tripPool: rule.mode === "AWARD" ? rule.tripPool ?? "H" : undefined,
+          note: `${notePrefix} ${describeTripLengthRange(rule)}`,
+        },
+      });
     });
   } else if (profile.preferLongTrips) {
-    // Legacy fallback: prefer 4D with 3D fallback.
+    // Legacy fallback if no rules are configured
     candidates.push({
       score: 80,
       command: {
